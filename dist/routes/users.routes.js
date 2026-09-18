@@ -1,0 +1,21 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const users_controller_1 = require("../controllers/users.controller");
+const auth_1 = require("../middleware/auth");
+const upload_middleware_1 = require("../middleware/upload.middleware");
+const router = express_1.default.Router();
+router.post("/register", auth_1.verifyFirebaseToken, users_controller_1.registerUser);
+router.get("/profile", auth_1.verifyFirebaseToken, users_controller_1.getProfile);
+router.patch("/profile", auth_1.verifyFirebaseToken, users_controller_1.updateProfile);
+router.post("/profile/photo", auth_1.verifyFirebaseToken, upload_middleware_1.profilePhotoUpload.single("photo"), users_controller_1.uploadProfilePhoto);
+router.delete("/profile", auth_1.verifyFirebaseToken, users_controller_1.deactivateProfile);
+router.get("/addresses", auth_1.verifyFirebaseToken, users_controller_1.getAddresses);
+router.post("/addresses", auth_1.verifyFirebaseToken, users_controller_1.createAddress);
+router.patch("/addresses/:id", auth_1.verifyFirebaseToken, users_controller_1.updateAddress);
+router.patch("/addresses/:id/default", auth_1.verifyFirebaseToken, users_controller_1.setDefaultAddress);
+router.delete("/addresses/:id", auth_1.verifyFirebaseToken, users_controller_1.deleteAddress);
+exports.default = router;

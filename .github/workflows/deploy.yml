@@ -1,0 +1,99 @@
+name: Build, test, and deploy backend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (TypeScript)
+        run: npm run build
+
+      - name: Run offline checklist suite
+        run: npm run augmont:checklist-check
+
+      - name: Package release artifact
+        run: |
+          mkdir -p release
+          tar -czf release/backend.tgz \
+            dist \
+            scripts \
+            package.json \
+            package-lock.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-release
+          path: release/backend.tgz
+          retention-days: 14
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    # Only deploy on an actual push to main, not on manual dispatch from a
+    # branch/PR context, and never if the build/test job above failed.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-release
+          path: release
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload release artifact
+        run: |
+          scp -i ~/.ssh/deploy_key release/backend.tgz \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/exgold-backend-release.tgz"
+
+      - name: Deploy on EC2 (backup, extract, syntax-check, reload, health-check)
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" bash -s <<'REMOTE'
+            set -euo pipefail
+            backend_root="/opt/exgold/backend"
+            stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+            backup_root="/opt/exgold/backups/ci-deploy-${stamp}"
+
+            sudo mkdir -p "${backup_root}"
+            sudo cp -a "${backend_root}/dist" "${backup_root}/dist" 2>/dev/null || true
+
+            cd "${backend_root}"
+            sudo tar -xzf /tmp/exgold-backend-release.tgz -C "${backend_root}"
+            sudo npm ci --omit=dev
+
+            # Fail the deploy loudly rather than reloading broken JS into
+            # production, matching the syntax-check step the existing manual
+            # hotfix scripts (.artifacts/deploy-*.sh) already used.
+            for f in $(find dist -name '*.js'); do
+              node --check "$f"
+            done
+
+            pm2 reload exgold-api --update-env
+            sleep 3
+            curl -fsS https://api.exgold.in/ > /dev/null
+
+            echo "Deployed. Backup at ${backup_root}"
+          REMOTE
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

@@ -8,6 +8,7 @@ import {
 } from "../controllers/subscription.controller";
 import { verifyFirebaseToken } from "../middleware/auth";
 import { verifyAdminJWT } from "../middleware/adminJwt";
+import { verifyAdmin } from "../middleware/admin";
 
 const router = express.Router();
 
@@ -15,6 +16,6 @@ const router = express.Router();
 router.get("/me", verifyFirebaseToken, getMySubscription);
 
 /* ADMIN */
-router.get("/all", verifyAdminJWT, getAllSubscriptions);
+router.get("/all", verifyAdminJWT, verifyAdmin, getAllSubscriptions);
 
 export default router;

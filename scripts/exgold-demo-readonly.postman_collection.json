@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "ExGold Demo Read-Only UAT Checks",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Profile: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Addresses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/users/addresses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Addresses: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Investment status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Investment status: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rates",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/rates"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Rates: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Balance",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Balance: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/portfolio"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Portfolio: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/transactions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Transactions: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Provider passbook",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/users/{{demoUid}}/passbook"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Provider passbook: expected HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject missing authentication",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/investment/balance"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Reject missing authentication: expected HTTP 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reject invalid authentication",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer invalid-test-token"
+          }
+        ],
+        "url": "{{baseUrl}}/investment/transactions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Reject invalid authentication: expected HTTP 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Response is JSON\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

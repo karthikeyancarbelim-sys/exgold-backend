@@ -8,7 +8,7 @@ import { verifyFirebaseToken } from "../middleware/auth";
 const router = express.Router();
 
 /* GET WALLET BALANCE */
-router.get("/", verifyFirebaseToken, getWallet);
+router.get("/balance", verifyFirebaseToken, getWallet);
 
 /* WALLET TRANSACTION HISTORY */
 router.get("/history", verifyFirebaseToken, getWalletHistory);

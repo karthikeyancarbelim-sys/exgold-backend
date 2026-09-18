@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "Augmont Remaining Checklist Read-Only Probes",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Cases 8/17–24: provider buy history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/users/{{demoUid}}/buy"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"JSON response\", () => pm.response.json());",
+              "pm.test(\"No explicit provider failure\", () => { const body = pm.response.json(); pm.expect(body.success).not.to.eql(false); if (body.statusCode !== undefined) pm.expect(Number(body.statusCode)).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cases 55–60: provider sell history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/users/{{demoUid}}/sell"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"JSON response\", () => pm.response.json());",
+              "pm.test(\"No explicit provider failure\", () => { const body = pm.response.json(); pm.expect(body.success).not.to.eql(false); if (body.statusCode !== undefined) pm.expect(Number(body.statusCode)).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Case 35 prerequisite: provider addresses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/users/{{demoUid}}/address"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"JSON response\", () => pm.response.json());",
+              "pm.test(\"No explicit provider failure\", () => { const body = pm.response.json(); pm.expect(body.success).not.to.eql(false); if (body.statusCode !== undefined) pm.expect(Number(body.statusCode)).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cases 50–52 prerequisite: provider bank list",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/users/{{demoUid}}/banks"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"JSON response\", () => pm.response.json());",
+              "pm.test(\"No explicit provider failure\", () => { const body = pm.response.json(); pm.expect(body.success).not.to.eql(false); if (body.statusCode !== undefined) pm.expect(Number(body.statusCode)).to.eql(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Case 25 guard: reject unavailable invoice",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{idToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/augmont/invoice/buy/EXG-UAT-NONEXISTENT"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"JSON response\", () => pm.response.json());"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
