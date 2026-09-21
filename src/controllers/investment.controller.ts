@@ -11,7 +11,6 @@ import {
 import { creditConfirmedMerchantSale } from "../services/augmont-merchant-settlement.service";
 import {
   getInvestmentKycEligibility,
-  InvestmentKycEligibility,
 } from "../services/investment-kyc.service";
 import { getAugmontMoneySafety } from "../utils/provider-environment";
 import { redactProviderPayload } from "../utils/provider-payload";
@@ -62,19 +61,6 @@ const getUser = async (uid: string) => {
   );
   return result.rows[0];
 };
-
-const kycBlockStatus = (eligibility: InvestmentKycEligibility) =>
-  eligibility.code === "kyc_required" || eligibility.code === "kyc_expired" ? 403 : 409;
-
-const kycBlockPayload = (eligibility: InvestmentKycEligibility) => ({
-  success: false,
-  code: eligibility.code,
-  message: eligibility.message,
-  action: "complete_kyc",
-  kycStatus: eligibility.localStatus,
-  investmentKycStatus: eligibility.approved ? "approved" : eligibility.code,
-  providerKycStatus: eligibility.providerStatus,
-});
 
 const getInvestmentSettings = async () => {
   const result = await pool.query("SELECT value FROM app_settings WHERE key='withdrawal'");
@@ -155,15 +141,14 @@ export const getInvestmentStatus = async (req: AuthRequest, res: Response) => {
     const buyRequiresKyc = kycFreePurchaseRemaining < settings.minimumBuyAmount;
     const buyEnabled = providerSafety.safe && settings.goldBuyEnabled &&
       (!buyRequiresKyc || investmentKycApproved);
-    const sellEnabled =
-      providerSafety.safe && settings.goldSellEnabled && investmentKycApproved;
+    const sellEnabled = providerSafety.safe && settings.goldSellEnabled;
 
     return res.json({
       enabled: true,
       kycStatus: eligibility.localStatus || user.kyc_status || "none",
       kycApproved: eligibility.localApproved,
       buyRequiresKyc,
-      sellRequiresKyc: true,
+      sellRequiresKyc: false,
       investmentKycStatus: investmentKycApproved
         ? "approved"
         : eligibility.approved
@@ -188,12 +173,8 @@ export const getInvestmentStatus = async (req: AuthRequest, res: Response) => {
       sellBlockReason: !providerSafety.safe
         ? providerSafety.message
         : settings.goldSellEnabled
-        ? investmentKycApproved
           ? null
-          : eligibility.approved
-            ? `Augmont KYC is ${eligibility.providerStatus || "pending"}`
-            : eligibility.message
-        : "Gold sale is temporarily paused",
+          : "Gold sale is temporarily paused",
       sipEnabled: false,
       provider: "augmont",
       sellPayoutMode: "exgold_wallet_then_verified_bank",
@@ -351,21 +332,6 @@ export const sellGoldInvestment = async (req: AuthRequest, res: Response) => {
     if (roundMoney(grams * liveSellRate) > augmontMerchantPolicy.maximumSellAmount) {
       return res.status(400).json({
         message: `Maximum gold sale is Rs.${augmontMerchantPolicy.maximumSellAmount.toFixed(0)}`,
-      });
-    }
-
-    const eligibility = await getInvestmentKycEligibility(req.user.uid, {
-      refreshProvider: true,
-    });
-    if (!eligibility.approved) {
-      return res.status(kycBlockStatus(eligibility)).json(kycBlockPayload(eligibility));
-    }
-
-    if (!eligibility.providerApproved) {
-      return res.status(409).json({
-        success: false,
-        code: "provider_kyc_pending",
-        message: `Augmont KYC is ${eligibility.providerStatus || "pending"}. Selling is unavailable until provider approval.`,
       });
     }
 

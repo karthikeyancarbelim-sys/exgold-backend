@@ -33,6 +33,17 @@ const uid = '5TCyBmRko2TT9Wdr3T9Xr1SlI0s1';
     throw Object.assign(new Error('Session identity mismatch'), { code: 'SESSION_IDENTITY_MISMATCH' });
   }
   console.log(JSON.stringify({ test: 'demo_admin_session', result: 'authenticated', otpFlowTested: false }));
+  if (process.argv.includes('--master-data') || process.argv.includes('--master-city')) {
+    const endpoint = process.argv.includes('--master-city')
+      ? '/augmont/master/cities?stateId=mVqoM9DM&name=Coimbatore&count=100&page=1'
+      : '/augmont/master/states?name=Tamil&count=100&page=1';
+    const response = await fetch('https://api.exgold.in' + endpoint, {
+      headers: { Authorization: `Bearer ${session.idToken}` }, redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    });
+    console.log(JSON.stringify({ geography: endpoint, status: response.status, data: await response.json() }));
+    return;
+  }
   if (process.argv.includes('--repair-address')) {
     const headers = { Authorization: `Bearer ${session.idToken}`, 'Content-Type': 'application/json' };
     const response = await fetch('https://api.exgold.in/users/addresses', {
@@ -57,7 +68,7 @@ const uid = '5TCyBmRko2TT9Wdr3T9Xr1SlI0s1';
           name: address.fullName, fullName: address.fullName, mobile: address.mobile,
           mobileNumber: address.mobile, phone: address.mobile,
           address: address.line1, line1: address.line1, line2: address.line2,
-          city: address.city, state: address.state, pincode: address.pincode,
+          city: 'YO9j0rq3', state: 'mVqoM9DM', pincode: address.pincode,
           pinCode: address.pincode, country: address.country,
         }), redirect: 'error', signal: AbortSignal.timeout(30000),
       });

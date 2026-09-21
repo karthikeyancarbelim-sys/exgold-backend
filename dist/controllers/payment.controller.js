@@ -125,7 +125,7 @@ const createDigitalGoldCheckout = async (req, res) => {
                 return res.status(kycBlockStatus(eligibility)).json(kycBlockPayload(eligibility));
             }
         }
-        await (0, investment_kyc_service_1.ensureAugmontInvestmentUser)(req.user.uid);
+        await (0, investment_kyc_service_1.ensureAugmontInvestmentUser)(req.user.uid, undefined, { requireAddressSync: true });
         if (requiresKyc) {
             eligibility = await (0, investment_kyc_service_1.getInvestmentKycEligibility)(req.user.uid, {
                 refreshProvider: true,
@@ -154,6 +154,9 @@ const createDigitalGoldCheckout = async (req, res) => {
         return res.status(201).json({ success: true, checkout });
     }
     catch (error) {
+        if (String(error?.message || '').includes('Augmont account setup needs')) {
+            return res.status(422).json({ message: error.message });
+        }
         return res.status(500).json({ message: error.message || "Unable to start payment" });
     }
 };

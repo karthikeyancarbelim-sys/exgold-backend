@@ -525,6 +525,14 @@ export const augmontGetRates = async ({
   try {
     return await rateRequest;
   } catch (error) {
+    // The stale-fallback path below re-enters the 60s throttle and replaces this
+    // error with a generic "quote unavailable" message, so log the real cause here.
+    console.warn(
+      "AUGMONT RATE FETCH ERROR:",
+      (error as any)?.message,
+      "status:", (error as any)?.status,
+      "provider:", JSON.stringify((error as any)?.providerResponse),
+    );
     if (!allowStale || forceRefresh) throw error;
     return sharedAugmontRates(async () => { throw error; }, true);
   }

@@ -11,7 +11,9 @@ const goldHistoryDetails = (row) => {
     const isPurchase = ["buy", "sip"].includes(type);
     const explicitTaxRate = (0, provider_payload_1.readDeep)(details, ["taxRate", "tax_rate", "gstRate"]);
     const taxRate = !isPurchase ? 0 : Number(explicitTaxRate ?? process.env.AUGMONT_GOLD_TAX_RATE ?? 3);
-    const explicitTaxAmount = (0, provider_payload_1.readDeep)(details, ["taxAmount", "tax_amount", "gstAmount"]);
+    // Augmont's taxSplit contains individual CGST/SGST components, not the total.
+    const explicitTaxAmount = (0, provider_payload_1.readDeep)(details, ["totalTaxAmount", "taxAmt"]) ??
+        (0, provider_payload_1.readDeep)(details, ["taxAmount", "tax_amount", "gstAmount"]);
     const taxAmount = !isPurchase ? 0 : Number(explicitTaxAmount ??
         (taxRate > 0 ? totalAmount - totalAmount / (1 + taxRate / 100) : 0));
     const taxableAmount = !isPurchase ? totalAmount : Number((0, provider_payload_1.readDeep)(details, ["preTaxAmount", "taxableAmount", "taxable_value"]) ?? Math.max(totalAmount - taxAmount, 0));

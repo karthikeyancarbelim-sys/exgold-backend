@@ -14,6 +14,17 @@ assert.equal(buy.quantity, 0.1);
 assert.equal(buy.invoice_available, true);
 assert.equal(buy.provider_transaction_id, 'AUG-BUY-1');
 assert.equal(buy.created_at, '2026-09-18T05:00:00Z');
+const splitTaxBuy = goldHistoryDetails({
+  activity_type: 'buy', amount: 500, gold_grams: 0.0303,
+  details: { result: { data: { preTaxAmount: '485.44', taxes: {
+    taxSplit: [{ taxPerc: '1.50', taxAmount: '7.28' }, { taxPerc: '1.50', taxAmount: '7.28' }],
+    totalTaxAmount: '14.56',
+  } } } },
+});
+assert.equal(splitTaxBuy.tax_amount, 14.56, 'use total GST, not the first split component');
+assert.equal(splitTaxBuy.taxable_amount, 485.44);
+assert.equal(goldHistoryDetails({ activity_type: 'buy', amount: 500, gold_grams: 0.0303,
+  details: { taxAmt: '14.56', taxRate: '3.00' } }).tax_amount, 14.56);
 const sell = goldHistoryDetails({ activity_type: 'sell', amount: 480.86, gold_grams: 0.0296,
   details: { taxRate: 3, taxAmount: 14, lockPrice: 16245.27 } });
 assert.equal(sell.tax_rate, 0);

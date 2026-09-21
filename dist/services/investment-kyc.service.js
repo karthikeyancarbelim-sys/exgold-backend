@@ -5,6 +5,7 @@ const db_1 = require("../config/db");
 const augmont_service_1 = require("./augmont.service");
 const investment_kyc_policy_1 = require("../utils/investment-kyc-policy");
 const augmont_profile_1 = require("../utils/augmont-profile");
+const augmont_geography_service_1 = require("./augmont-geography.service");
 const kycValidityDays = Number(process.env.KYC_VALIDITY_DAYS || 365);
 const providerApprovedStatuses = new Set([
     "approved",
@@ -247,10 +248,22 @@ const buildAugmontKycPayload = (context) => {
         ].filter(Boolean),
     };
 };
-const buildAugmontUserPayload = (context) => {
+const buildAugmontUserPayload = async (context) => {
     const result = (0, augmont_profile_1.buildAugmontProfile)(context);
+    if (result.missing.length)
+        return result;
+    const { cityId, stateId } = await (0, augmont_geography_service_1.resolveAugmontGeography)(context.address_city, context.address_state);
     const dateOfBirth = dateOnly(context.user_dob);
-    return { ...result, payload: { ...result.payload, ...(dateOfBirth ? { dateOfBirth } : {}) } };
+    return { ...result, payload: { ...result.payload, userCity: cityId, userState: stateId,
+            ...(dateOfBirth ? { dateOfBirth } : {}) } };
+};
+const requireConfirmedAugmontAddress = async (uniqueId) => {
+    const confirmed = await (0, augmont_service_1.augmontGetUser)(uniqueId);
+    const providerAddress = String((0, augmont_service_1.extractDeep)(confirmed, ['userAddress']) || '').trim();
+    if (!providerAddress) {
+        throw new Error('Augmont did not confirm the customer street address. No payment was created.');
+    }
+    return confirmed;
 };
 const ensureAugmontUserFromContext = async (context, options = {}) => {
     const uniqueId = String(context?.firebase_uid || "");
@@ -267,12 +280,20 @@ const ensureAugmontUserFromContext = async (context, options = {}) => {
         // not on every buy/sell call, to avoid hitting Augmont's API on every
         // transaction.
         if (options.syncAddress) {
-            const { payload, missing } = buildAugmontUserPayload(context);
+            const { payload, missing } = await buildAugmontUserPayload(context);
+            if (missing.length && options.requireAddressSync) {
+                throw new Error(`Augmont account setup needs ${missing.join(' and ')}`);
+            }
             if (!missing.length) {
                 try {
                     await (0, augmont_service_1.augmontUpdateUser)(uniqueId, payload);
+                    if (options.requireAddressSync) {
+                        await requireConfirmedAugmontAddress(uniqueId);
+                    }
                 }
                 catch (updateError) {
+                    if (options.requireAddressSync)
+                        throw updateError;
                     console.warn("AUGMONT ADDRESS SYNC FAILED:", updateError?.message || updateError);
                 }
             }
@@ -283,25 +304,30 @@ const ensureAugmontUserFromContext = async (context, options = {}) => {
         if (!(0, augmont_service_1.isAugmontMissingResourceError)(lookupError))
             throw lookupError;
     }
-    const { payload, missing } = buildAugmontUserPayload(context);
+    const { payload, missing } = await buildAugmontUserPayload(context);
     if (missing.length) {
         throw new Error(`Augmont account setup needs ${missing.join(" and ")}`);
     }
     try {
-        return await (0, augmont_service_1.augmontCreateUser)(payload);
+        const created = await (0, augmont_service_1.augmontCreateUser)(payload);
+        return options.requireAddressSync
+            ? await requireConfirmedAugmontAddress(uniqueId)
+            : created;
     }
     catch (createError) {
         // A timed-out first request or a concurrent checkout may already have
         // created the unique provider account. Verify before surfacing failure.
         try {
-            return await (0, augmont_service_1.augmontGetUser)(uniqueId);
+            return options.requireAddressSync
+                ? await requireConfirmedAugmontAddress(uniqueId)
+                : await (0, augmont_service_1.augmontGetUser)(uniqueId);
         }
         catch {
             throw createError;
         }
     }
 };
-const ensureAugmontInvestmentUser = async (firebaseUid, address) => {
+const ensureAugmontInvestmentUser = async (firebaseUid, address, options = {}) => {
     const context = await loadContext(firebaseUid);
     if (!context)
         throw new Error("User account was not found");
@@ -310,7 +336,10 @@ const ensureAugmontInvestmentUser = async (firebaseUid, address) => {
             address_line1: address.line1, address_line2: address.line2,
             address_city: address.city, address_state: address.state, address_pincode: address.pincode,
         });
-    await ensureAugmontUserFromContext(context, { syncAddress: Boolean(address) });
+    await ensureAugmontUserFromContext(context, {
+        syncAddress: Boolean(address) || options.requireAddressSync,
+        requireAddressSync: options.requireAddressSync,
+    });
     return context;
 };
 exports.ensureAugmontInvestmentUser = ensureAugmontInvestmentUser;

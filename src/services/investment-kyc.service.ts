@@ -10,6 +10,7 @@ import {
 } from "./augmont.service";
 import { evaluateLocalInvestmentKyc } from "../utils/investment-kyc-policy";
 import { buildAugmontProfile } from "../utils/augmont-profile";
+import { resolveAugmontGeography } from "./augmont-geography.service";
 
 export type InvestmentKycCode =
   | "approved"
@@ -301,13 +302,25 @@ const buildAugmontKycPayload = (context: any) => {
   };
 };
 
-const buildAugmontUserPayload = (context: any) => {
+const buildAugmontUserPayload = async (context: any) => {
   const result = buildAugmontProfile(context);
+  if (result.missing.length) return result;
+  const { cityId, stateId } = await resolveAugmontGeography(context.address_city, context.address_state);
   const dateOfBirth = dateOnly(context.user_dob);
-  return { ...result, payload: { ...result.payload, ...(dateOfBirth ? { dateOfBirth } : {}) } };
+  return { ...result, payload: { ...result.payload, userCity: cityId, userState: stateId,
+    ...(dateOfBirth ? { dateOfBirth } : {}) } };
 };
 
-const ensureAugmontUserFromContext = async (context: any, options: { syncAddress?: boolean } = {}) => {
+const requireConfirmedAugmontAddress = async (uniqueId: string) => {
+  const confirmed = await augmontGetUser(uniqueId);
+  const providerAddress = String(extractDeep(confirmed, ['userAddress']) || '').trim();
+  if (!providerAddress) {
+    throw new Error('Augmont did not confirm the customer street address. No payment was created.');
+  }
+  return confirmed;
+};
+
+const ensureAugmontUserFromContext = async (context: any, options: { syncAddress?: boolean; requireAddressSync?: boolean } = {}) => {
   const uniqueId = String(context?.firebase_uid || "");
   if (!uniqueId) throw new Error("User account is missing its provider identifier");
 
@@ -322,11 +335,18 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
     // not on every buy/sell call, to avoid hitting Augmont's API on every
     // transaction.
     if (options.syncAddress) {
-      const { payload, missing } = buildAugmontUserPayload(context);
+      const { payload, missing } = await buildAugmontUserPayload(context);
+      if (missing.length && options.requireAddressSync) {
+        throw new Error(`Augmont account setup needs ${missing.join(' and ')}`);
+      }
       if (!missing.length) {
         try {
           await augmontUpdateUser(uniqueId, payload);
+          if (options.requireAddressSync) {
+            await requireConfirmedAugmontAddress(uniqueId);
+          }
         } catch (updateError) {
+          if (options.requireAddressSync) throw updateError;
           console.warn("AUGMONT ADDRESS SYNC FAILED:", (updateError as any)?.message || updateError);
         }
       }
@@ -336,18 +356,23 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
     if (!isAugmontMissingResourceError(lookupError)) throw lookupError;
   }
 
-  const { payload, missing } = buildAugmontUserPayload(context);
+  const { payload, missing } = await buildAugmontUserPayload(context);
   if (missing.length) {
     throw new Error(`Augmont account setup needs ${missing.join(" and ")}`);
   }
 
   try {
-    return await augmontCreateUser(payload);
+    const created = await augmontCreateUser(payload);
+    return options.requireAddressSync
+      ? await requireConfirmedAugmontAddress(uniqueId)
+      : created;
   } catch (createError) {
     // A timed-out first request or a concurrent checkout may already have
     // created the unique provider account. Verify before surfacing failure.
     try {
-      return await augmontGetUser(uniqueId);
+      return options.requireAddressSync
+        ? await requireConfirmedAugmontAddress(uniqueId)
+        : await augmontGetUser(uniqueId);
     } catch {
       throw createError;
     }
@@ -356,14 +381,17 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
 
 export const ensureAugmontInvestmentUser = async (firebaseUid: string, address?: {
   line1: string; line2?: string; city: string; state: string; pincode: string;
-}) => {
+}, options: { requireAddressSync?: boolean } = {}) => {
   const context = await loadContext(firebaseUid);
   if (!context) throw new Error("User account was not found");
   if (address) Object.assign(context, {
     address_line1: address.line1, address_line2: address.line2,
     address_city: address.city, address_state: address.state, address_pincode: address.pincode,
   });
-  await ensureAugmontUserFromContext(context, { syncAddress: Boolean(address) });
+  await ensureAugmontUserFromContext(context, {
+    syncAddress: Boolean(address) || options.requireAddressSync,
+    requireAddressSync: options.requireAddressSync,
+  });
   return context;
 };
 

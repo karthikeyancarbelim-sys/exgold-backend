@@ -24,11 +24,8 @@ const buildAugmontProfile = (context) => {
         payload: {
             uniqueId: String(context.firebase_uid || ''), userName: name.slice(0, 50),
             mobileNumber: mobile, userPincode: pincode,
-            // NOTE: field names below (userAddress/userCity/userState) follow Augmont's
-            // userName/userPincode naming convention but are not confirmed against
-            // Augmont's POST /merchant/v1/users documentation. Verify against Augmont
-            // support/docs and correct the keys if their API expects different names.
-            ...(line1 ? { userAddress: line2 ? `${line1}, ${line2}` : line1 } : {}),
+            userAddress: [line1, line2].filter(Boolean).join(', ').slice(0, 255),
+            // The service resolves these local names to Augmont master-data IDs.
             ...(city ? { userCity: city } : {}),
             ...(state ? { userState: state } : {}),
             ...(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? { emailId: email } : {}),

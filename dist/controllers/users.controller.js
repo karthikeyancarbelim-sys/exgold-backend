@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivateProfile = exports.setDefaultAddress = exports.deleteAddress = exports.updateAddress = exports.createAddress = exports.getAddresses = exports.uploadProfilePhoto = exports.updateProfile = exports.registerUser = exports.getProfile = void 0;
 const db_1 = require("../config/db");
 const investment_kyc_service_1 = require("../services/investment-kyc.service");
+const augmont_geography_service_1 = require("../services/augmont-geography.service");
 const augmont_service_1 = require("../services/augmont.service");
 const toCamelProfile = (user) => ({
     id: user.id,
@@ -85,20 +86,13 @@ const validateAddress = (address) => {
         .filter((key) => !address[key]);
     return missing;
 };
-const augmontAddressBody = (address) => ({
+const augmontAddressBody = (address, cityId, stateId) => ({
     name: address.fullName,
-    fullName: address.fullName,
-    mobile: address.mobile,
-    mobileNumber: address.mobile,
-    phone: address.mobile,
-    address: address.line1,
-    line1: address.line1,
-    line2: address.line2,
-    city: address.city,
-    state: address.state,
+    mobileNumber: address.mobile.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, ''),
+    address: [address.line1, address.line2].filter(Boolean).join(', '),
+    city: cityId,
+    state: stateId,
     pincode: address.pincode,
-    pinCode: address.pincode,
-    country: address.country,
 });
 const extractAddressId = (payload) => {
     const value = (0, augmont_service_1.extractDeep)(payload, [
@@ -113,7 +107,8 @@ const extractAddressId = (payload) => {
 const safeSyncAddressToAugmont = async (uniqueId, address) => {
     try {
         await (0, investment_kyc_service_1.ensureAugmontInvestmentUser)(uniqueId, address);
-        const providerPayload = await (0, augmont_service_1.augmontSaveUserAddress)(uniqueId, augmontAddressBody(address));
+        const { cityId, stateId } = await (0, augmont_geography_service_1.resolveAugmontGeography)(address.city, address.state);
+        const providerPayload = await (0, augmont_service_1.augmontSaveUserAddress)(uniqueId, augmontAddressBody(address, cityId, stateId));
         return {
             providerPayload,
             augmontAddressId: extractAddressId(providerPayload),
@@ -197,6 +192,7 @@ exports.registerUser = registerUser;
 /* ===============================
    UPDATE PROFILE
    =============================== */
+const selfServiceRoles = ["buyer", "seller", "shop"];
 const updateProfile = async (req, res) => {
     try {
         const uid = req.user.uid;
@@ -221,6 +217,13 @@ const updateProfile = async (req, res) => {
             values.push(req.body[bodyKey]);
             updates.push(`${column} = $${values.length}`);
         });
+        const requestedRole = String(req.body.role ?? "").trim().toLowerCase();
+        if (columns.has("role") && selfServiceRoles.includes(requestedRole)) {
+            values.push(requestedRole);
+            // Privileged roles (internal/team/staff/admin) bypass posting limits, so a
+            // profile save must never change them in either direction.
+            updates.push(`role = CASE WHEN COALESCE(role, 'buyer') IN ('buyer','seller','shop') THEN $${values.length} ELSE role END`);
+        }
         if (updates.length === 0) {
             return (0, exports.getProfile)(req, res);
         }

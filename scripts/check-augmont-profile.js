@@ -8,6 +8,9 @@ const noKyc = buildAugmontProfile(fixture);
 assert.deepEqual(noKyc.missing, []);
 assert.equal(noKyc.payload.mobileNumber, '9876543210');
 assert.equal(noKyc.payload.emailId, 'demo@example.com');
+assert.equal(noKyc.payload.userAddress, 'Test address');
+assert.equal(buildAugmontProfile({ ...fixture, address_line2: 'Unit 2' }).payload.userAddress,
+  'Test address, Unit 2');
 assert.deepEqual(buildAugmontProfile({ ...fixture, pan_name: 'Different KYC Name',
   aadhaar_status: 'rejected', pan_status: 'pending' }), noKyc);
 assert.ok(buildAugmontProfile({ ...fixture, address_line1: '' }).missing.includes('address'));
