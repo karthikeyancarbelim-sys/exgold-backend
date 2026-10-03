@@ -128,49 +128,64 @@ const persistDerivedRatesWhenNeeded = async (price24k: number) => {
   await ratePersistRequest;
 };
 
+const refreshStoredRates = async () => {
+  try {
+    const augmont24k = await getAugmont24kRate();
+    if (augmont24k > 0) {
+      await persistDerivedRatesWhenNeeded(augmont24k);
+    }
+  } catch (error: any) {
+    // A provider quote must never prevent the public rate board from showing
+    // the most recently verified stored rate.
+    console.warn("AUGMONT RATE FALLBACK:", error?.message || error);
+  }
+};
+
+const loadStoredRates = () =>
+  pool.query(
+    `SELECT DISTINCT ON (${karatSql("r")})
+      r.karat,
+      r.price_per_gram AS market_price,
+      (r.price_per_gram + COALESCE(m.buy_margin, 0)) AS buy_price,
+      (r.price_per_gram - COALESCE(m.sell_margin, 0)) AS sell_price,
+      COALESCE(prev.price_per_gram, r.price_per_gram) AS yesterday_price,
+      (r.price_per_gram - COALESCE(prev.price_per_gram, r.price_per_gram)) AS price_change,
+      CASE
+        WHEN COALESCE(prev.price_per_gram, 0) = 0 THEN 0
+        ELSE ROUND((((r.price_per_gram - prev.price_per_gram) / prev.price_per_gram) * 100)::numeric, 2)
+      END AS percent_change,
+      r.updated_at,
+      'augmont_or_manual_fallback' AS source
+     FROM gold_rates r
+     LEFT JOIN gold_margin m ON ${karatSql("r")} = ${karatSql("m")}
+     LEFT JOIN LATERAL (
+       SELECT price_per_gram
+       FROM gold_rate_history h
+       WHERE ${karatSql("h")} = ${karatSql("r")}
+         AND (h.created_at AT TIME ZONE 'Asia/Kolkata')::date <
+             (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       ORDER BY h.created_at DESC
+       LIMIT 1
+     ) prev ON true
+     WHERE ${karatSql("r")} IN (18, 22, 24)
+       AND r.price_per_gram > 0
+     ORDER BY ${karatSql("r")}, r.updated_at DESC`
+  );
+
 /* ===============================
    GET GOLD RATES (WITH MARGIN)
    =============================== */
 export const getGoldRates = async (req: Request, res: Response) => {
   try {
-    try {
-      const augmont24k = await getAugmont24kRate();
-      if (augmont24k > 0) {
-        await persistDerivedRatesWhenNeeded(augmont24k);
-      }
-    } catch (error: any) {
-      console.warn("AUGMONT RATE FALLBACK:", error?.message || error);
-    }
+    const refresh = refreshStoredRates();
+    let result = await loadStoredRates();
 
-    const result = await pool.query(
-      `SELECT DISTINCT ON (${karatSql("r")})
-        r.karat,
-        r.price_per_gram AS market_price,
-        (r.price_per_gram + COALESCE(m.buy_margin, 0)) AS buy_price,
-        (r.price_per_gram - COALESCE(m.sell_margin, 0)) AS sell_price,
-        COALESCE(prev.price_per_gram, r.price_per_gram) AS yesterday_price,
-        (r.price_per_gram - COALESCE(prev.price_per_gram, r.price_per_gram)) AS price_change,
-        CASE
-          WHEN COALESCE(prev.price_per_gram, 0) = 0 THEN 0
-          ELSE ROUND((((r.price_per_gram - prev.price_per_gram) / prev.price_per_gram) * 100)::numeric, 2)
-        END AS percent_change,
-        r.updated_at,
-        'augmont_or_manual_fallback' AS source
-       FROM gold_rates r
-       LEFT JOIN gold_margin m ON ${karatSql("r")} = ${karatSql("m")}
-       LEFT JOIN LATERAL (
-         SELECT price_per_gram
-         FROM gold_rate_history h
-         WHERE ${karatSql("h")} = ${karatSql("r")}
-           AND (h.created_at AT TIME ZONE 'Asia/Kolkata')::date <
-               (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-         ORDER BY h.created_at DESC
-         LIMIT 1
-       ) prev ON true
-       WHERE ${karatSql("r")} IN (18, 22, 24)
-         AND r.price_per_gram > 0
-       ORDER BY ${karatSql("r")}, r.updated_at DESC`
-    );
+    // A brand-new installation has no persisted quote yet. In that one case,
+    // wait for the provider before responding; established users never wait.
+    if (result.rows.length === 0) {
+      await refresh;
+      result = await loadStoredRates();
+    }
 
     res.json(result.rows);
   } catch (error) {
