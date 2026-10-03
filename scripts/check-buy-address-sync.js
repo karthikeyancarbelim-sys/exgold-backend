@@ -16,6 +16,7 @@ let context = {
 };
 let confirmedAddress = '';
 let updateFails = false;
+let nameLocked = false;
 let updateCount = 0;
 let accountExists = true;
 let createCount = 0;
@@ -45,6 +46,9 @@ mock('../dist/services/augmont.service', {
     assert.equal(payload.userAddress, '1 Test Street');
     assert.equal(payload.userCity, 11);
     assert.equal(payload.userState, 22);
+    if (nameLocked && payload.userName) {
+      throw Object.assign(new Error('The user name can not be changed after kyc approved.'), { status: 422 });
+    }
     if (updateFails) throw new Error('Provider update rejected');
   },
   extractDeep: (value, keys) => keys.map(key => value?.data?.[key]).find(v => v != null),
@@ -59,6 +63,9 @@ const { ensureAugmontInvestmentUser } = require('../dist/services/investment-kyc
   assert.equal(updateCount, 1);
   confirmedAddress = '1 Test Street';
   await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });
+  nameLocked = true;
+  await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });
+  nameLocked = false;
   updateFails = true;
   await assert.rejects(
     ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
@@ -70,7 +77,7 @@ const { ensureAugmontInvestmentUser } = require('../dist/services/investment-kyc
     ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
     /account setup needs address/,
   );
-  assert.equal(updateCount, 4);
+  assert.equal(updateCount, 6);
   context = { ...context, address_line1: '1 Test Street' };
   accountExists = false;
   confirmedAddress = '';

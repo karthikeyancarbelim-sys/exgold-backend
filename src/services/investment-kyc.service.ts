@@ -349,6 +349,20 @@ const isExplicitlyMissingAugmontUser = (error: unknown) =>
     /user account does not exist|user (?:account )?not found/i.test(String((error as any)?.message || ''))
   );
 
+const updateAugmontProfileAddress = async (uniqueId: string, payload: Record<string, any>) => {
+  try {
+    return await augmontUpdateUser(uniqueId, payload);
+  } catch (error: any) {
+    // After KYC approval Augmont locks identity fields, but still permits the
+    // delivery-address fields needed for a digital-gold purchase.
+    if (Number(error?.status) === 422 && /user name can not be changed after kyc approved/i.test(String(error?.message || ''))) {
+      const { userName, mobileNumber, dateOfBirth, ...addressPayload } = payload;
+      return augmontUpdateUser(uniqueId, addressPayload);
+    }
+    throw error;
+  }
+};
+
 const ensureAugmontUserFromContext = async (context: any, options: { syncAddress?: boolean; requireAddressSync?: boolean } = {}) => {
   const uniqueId = String(context?.firebase_uid || "");
   if (!uniqueId) throw new Error("User account is missing its provider identifier");
@@ -370,7 +384,7 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
       }
       if (!missing.length) {
         try {
-          const updated = await augmontUpdateUser(uniqueId, payload);
+          const updated = await updateAugmontProfileAddress(uniqueId, payload);
           if (options.requireAddressSync) {
             // A successful provider update is the confirmation. UAT can return
             // 422 to GET /users/{uniqueId} for an account that nevertheless
@@ -394,7 +408,7 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
         if (missing.length) {
           throw new Error(`Augmont account setup needs ${missing.join(' and ')}`);
         }
-        return augmontUpdateUser(uniqueId, payload);
+        return updateAugmontProfileAddress(uniqueId, payload);
       }
       throw lookupError;
     }
