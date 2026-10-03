@@ -10,6 +10,7 @@ import {
 } from "../services/digital-gold-sale-settlement.service";
 import { creditConfirmedMerchantSale } from "../services/augmont-merchant-settlement.service";
 import {
+  getAugmontInvestmentProfileReadiness,
   getInvestmentKycEligibility,
 } from "../services/investment-kyc.service";
 import { getAugmontMoneySafety } from "../utils/provider-environment";
@@ -131,6 +132,7 @@ export const getInvestmentStatus = async (req: AuthRequest, res: Response) => {
     const eligibility = await getInvestmentKycEligibility(req.user.uid, {
       refreshProvider: true,
     });
+    const profileReadiness = await getAugmontInvestmentProfileReadiness(req.user.uid);
     const providerSafety = getAugmontMoneySafety();
     const investmentKycApproved = eligibility.approved && eligibility.providerApproved;
     const fyBuyTotal = await financialYearBuyTotal(Number(user.id));
@@ -140,7 +142,7 @@ export const getInvestmentStatus = async (req: AuthRequest, res: Response) => {
     );
     const buyRequiresKyc = kycFreePurchaseRemaining < settings.minimumBuyAmount;
     const buyEnabled = providerSafety.safe && settings.goldBuyEnabled &&
-      (!buyRequiresKyc || investmentKycApproved);
+      profileReadiness.ready && (!buyRequiresKyc || investmentKycApproved);
     const sellEnabled = providerSafety.safe && settings.goldSellEnabled;
 
     return res.json({
@@ -161,8 +163,12 @@ export const getInvestmentStatus = async (req: AuthRequest, res: Response) => {
       providerReady: providerSafety.safe,
       sellProviderReady: providerSafety.safe,
       providerEnvironment: providerSafety.environment,
+      profileReady: profileReadiness.ready,
+      profileMissingFields: profileReadiness.missing,
       buyBlockReason: !providerSafety.safe
         ? providerSafety.message
+        : !profileReadiness.ready
+        ? `Complete your profile before buying digital gold: ${profileReadiness.missing.join(', ')}`
         : settings.goldBuyEnabled
         ? buyRequiresKyc && !investmentKycApproved
           ? eligibility.approved

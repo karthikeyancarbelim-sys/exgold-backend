@@ -4,6 +4,7 @@ const admin = require('../dist/config/firebase').default;
 
 const uid = '5TCyBmRko2TT9Wdr3T9Xr1SlI0s1';
 const baseUrl = 'https://api.exgold.in';
+const requestedAmount = Number(process.argv[2] || 5);
 
 const request = async (endpoint, token, options = {}) => {
   const response = await fetch(baseUrl + endpoint, {
@@ -21,6 +22,9 @@ const request = async (endpoint, token, options = {}) => {
 };
 
 (async () => {
+  if (!Number.isFinite(requestedAmount) || requestedAmount < 5 || requestedAmount > 5000000) {
+    throw new Error('Provide a Buy amount from Rs.5 to Rs.5000000');
+  }
   const user = await admin.auth().getUser(uid);
   if (user.disabled || user.phoneNumber !== '+919876543210') {
     throw new Error('Demo reviewer identity is unavailable');
@@ -52,7 +56,9 @@ const request = async (endpoint, token, options = {}) => {
   if (!statusResult.response.ok) {
     throw new Error(`Investment status failed with HTTP ${statusResult.response.status}`);
   }
-  if (statusResult.body?.buyEnabled !== true || statusResult.body?.providerReady !== true) {
+  if (statusResult.body?.buyEnabled !== true ||
+      statusResult.body?.providerReady !== true ||
+      statusResult.body?.profileReady !== true) {
     throw new Error(`Buy is blocked: ${statusResult.body?.buyBlockReason || 'unknown reason'}`);
   }
 
@@ -63,7 +69,7 @@ const request = async (endpoint, token, options = {}) => {
 
   const checkoutResult = await request('/payment/checkout/digital-gold', session.idToken, {
     method: 'POST',
-    body: JSON.stringify({ amount: 5 }),
+    body: JSON.stringify({ amount: requestedAmount }),
   });
   const checkout = checkoutResult.body?.checkout;
   if (checkoutResult.response.status !== 201 || !checkout?.orderId || !checkout?.checkoutId) {
@@ -81,6 +87,7 @@ const request = async (endpoint, token, options = {}) => {
     status: {
       buyEnabled: statusResult.body.buyEnabled,
       providerReady: statusResult.body.providerReady,
+      profileReady: statusResult.body.profileReady,
       providerEnvironment: statusResult.body.providerEnvironment,
       paymentEnvironment: 'test',
     },

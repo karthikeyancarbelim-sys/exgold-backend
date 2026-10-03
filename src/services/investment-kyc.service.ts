@@ -30,6 +30,11 @@ export type InvestmentKycEligibility = {
   message: string;
 };
 
+export type InvestmentProfileReadiness = {
+  ready: boolean;
+  missing: string[];
+};
+
 type EligibilityOptions = {
   refreshProvider?: boolean;
 };
@@ -140,6 +145,17 @@ const loadContext = async (firebaseUid: string) => {
     [firebaseUid]
   );
   return result.rows[0] || null;
+};
+
+export const getAugmontInvestmentProfileReadiness = async (
+  firebaseUid: string,
+): Promise<InvestmentProfileReadiness> => {
+  const context = await loadContext(firebaseUid);
+  if (!context) {
+    return { ready: false, missing: ['profile'] };
+  }
+  const { missing } = buildAugmontProfile(context);
+  return { ready: missing.length === 0, missing };
 };
 
 const loadContextByUserId = async (userId: number) => {

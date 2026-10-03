@@ -10,6 +10,7 @@ import {
 } from "../services/augmont.service";
 import {
   ensureAugmontInvestmentUser,
+  getAugmontInvestmentProfileReadiness,
   getInvestmentKycEligibility,
   InvestmentKycEligibility,
 } from "../services/investment-kyc.service";
@@ -146,6 +147,15 @@ export const createDigitalGoldCheckout = async (req: AuthRequest, res: Response)
 
     const user = await getCurrentUser(req.user.uid);
     if (!user) return res.status(404).json({ message: "User not found" });
+    const profileReadiness = await getAugmontInvestmentProfileReadiness(req.user.uid);
+    if (!profileReadiness.ready) {
+      return res.status(422).json({
+        success: false,
+        code: "profile_incomplete",
+        missingFields: profileReadiness.missing,
+        message: `Complete your profile before buying digital gold: ${profileReadiness.missing.join(', ')}`,
+      });
+    }
     const financialYearTotal = await financialYearBuyTotal(user.id);
     const requiresKyc =
       financialYearTotal + amount > augmontMerchantPolicy.kycFinancialYearThreshold;
