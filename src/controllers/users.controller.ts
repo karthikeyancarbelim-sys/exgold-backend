@@ -124,23 +124,14 @@ const safeSyncAddressToAugmont = async (
   uniqueId: string,
   address: ReturnType<typeof normalizeAddressInput>
 ) => {
-  try {
-    await ensureAugmontInvestmentUser(uniqueId, address);
-    const { cityId, stateId } = await resolveAugmontGeography(address.city, address.state);
-    const providerPayload = await augmontSaveUserAddress(uniqueId, augmontAddressBody(address, cityId, stateId));
-    return {
-      providerPayload,
-      augmontAddressId: extractAddressId(providerPayload),
-    };
-  } catch (error: any) {
-    return {
-      providerPayload: {
-        syncStatus: "failed",
-        message: error?.message || "Augmont address sync failed",
-      },
-      augmontAddressId: "",
-    };
+  await ensureAugmontInvestmentUser(uniqueId, address, { requireAddressSync: true });
+  const { cityId, stateId } = await resolveAugmontGeography(address.city, address.state);
+  const providerPayload = await augmontSaveUserAddress(uniqueId, augmontAddressBody(address, cityId, stateId));
+  const augmontAddressId = extractAddressId(providerPayload);
+  if (!augmontAddressId) {
+    throw new Error("Augmont did not return a delivery address identifier");
   }
+  return { providerPayload, augmontAddressId };
 };
 
 /* ===============================
@@ -426,7 +417,7 @@ export const createAddress = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("CREATE ADDRESS ERROR:", error);
-    return res.status(500).json({ message: "Failed to save delivery address" });
+    return res.status(502).json({ message: (error as any)?.message || "Augmont could not save this delivery address" });
   } finally {
     client.release();
   }
@@ -508,7 +499,7 @@ export const updateAddress = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("UPDATE ADDRESS ERROR:", error);
-    return res.status(500).json({ message: "Failed to update delivery address" });
+    return res.status(502).json({ message: (error as any)?.message || "Augmont could not update this delivery address" });
   } finally {
     client.release();
   }

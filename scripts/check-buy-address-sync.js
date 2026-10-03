@@ -32,6 +32,9 @@ mock('../dist/services/augmont.service', {
     if (!accountExists) throw Object.assign(new Error('missing'), { status: 404 });
     return { data: { userAddress: confirmedAddress } };
   },
+  augmontGetUserAddresses: async () => confirmedAddress
+    ? { data: [{ userAddressId: 'address-1', address: confirmedAddress }] }
+    : { data: [] },
   augmontCreateUser: async (_payload) => {
     createCount++;
     accountExists = true;

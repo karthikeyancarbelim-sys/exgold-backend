@@ -1,6 +1,7 @@
 import { pool } from "../config/db";
 import {
   augmontCreateUser,
+  augmontGetUserAddresses,
   augmontGetUser,
   augmontGetUserKyc,
   augmontSubmitUserKyc,
@@ -330,10 +331,17 @@ const buildAugmontUserPayload = async (context: any) => {
 const requireConfirmedAugmontAddress = async (uniqueId: string) => {
   const confirmed = await augmontGetUser(uniqueId);
   const providerAddress = String(extractDeep(confirmed, ['userAddress']) || '').trim();
-  if (!providerAddress) {
+  if (providerAddress) return confirmed;
+
+  // Some Augmont responses store delivery addresses only under the dedicated
+  // address resource rather than mirroring the street field on the user.
+  const addresses = await augmontGetUserAddresses(uniqueId);
+  const addressId = extractDeep(addresses, ['userAddressId', 'user_address_id', 'addressId', 'address_id', 'id']);
+  const listedAddress = String(extractDeep(addresses, ['address', 'userAddress', 'addressLine1']) || '').trim();
+  if (!addressId && !listedAddress) {
     throw new Error('Augmont did not confirm the customer street address. No payment was created.');
   }
-  return confirmed;
+  return addresses;
 };
 
 const ensureAugmontUserFromContext = async (context: any, options: { syncAddress?: boolean; requireAddressSync?: boolean } = {}) => {

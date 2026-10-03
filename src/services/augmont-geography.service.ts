@@ -2,7 +2,9 @@ import { augmontGetCities, augmontGetStates } from './augmont.service';
 
 type Place = { id: string; name: string; stateId?: string };
 const cache = new Map<string, { expires: number; value: string }>();
-const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+// Provider master data uses display names such as "Tamil Nadu". Treat common
+// mobile-input variants such as "Tamilnadu" as the same location.
+const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const findPlace = async (
   label: string, name: string, fetchPage: (page: number) => Promise<any>, stateId?: string
@@ -32,8 +34,8 @@ const findPlace = async (
 
 export const resolveAugmontGeography = async (city: string, state: string) => {
   const stateId = await findPlace('state', state, page =>
-    augmontGetStates({ name: state.trim(), count: 100, page }));
+    augmontGetStates({ count: 100, page }));
   const cityId = await findPlace('city', city, page =>
-    augmontGetCities({ stateId, name: city.trim(), count: 100, page }), stateId);
+    augmontGetCities({ stateId, count: 100, page }), stateId);
   return { cityId, stateId };
 };
