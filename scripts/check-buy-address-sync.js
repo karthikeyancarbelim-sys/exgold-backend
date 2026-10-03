@@ -77,7 +77,7 @@ const { ensureAugmontInvestmentUser } = require('../dist/services/investment-kyc
     ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
     /account setup needs address/,
   );
-  assert.equal(updateCount, 6);
+  assert.equal(updateCount, 5);
   context = { ...context, address_line1: '1 Test Street' };
   accountExists = false;
   confirmedAddress = '';

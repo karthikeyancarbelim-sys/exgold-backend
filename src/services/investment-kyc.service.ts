@@ -353,11 +353,11 @@ const updateAugmontProfileAddress = async (uniqueId: string, payload: Record<str
   try {
     return await augmontUpdateUser(uniqueId, payload);
   } catch (error: any) {
-    // After KYC approval Augmont locks identity fields, but still permits the
-    // delivery-address fields needed for a digital-gold purchase.
+    // After KYC approval Augmont locks the identity. The dedicated address
+    // endpoint remains available and is called by the address controller, so
+    // do not turn an address save or Buy into an identity-change attempt.
     if (Number(error?.status) === 422 && /user name can not be changed after kyc approved/i.test(String(error?.message || ''))) {
-      const { userName, mobileNumber, dateOfBirth, ...addressPayload } = payload;
-      return augmontUpdateUser(uniqueId, addressPayload);
+      return { identityLocked: true };
     }
     throw error;
   }
