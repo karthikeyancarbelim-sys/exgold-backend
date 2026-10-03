@@ -53,10 +53,9 @@ mock('../dist/services/augmont.service', {
 
 const { ensureAugmontInvestmentUser } = require('../dist/services/investment-kyc.service');
 (async () => {
-  await assert.rejects(
-    ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
-    /did not confirm the customer street address/,
-  );
+  // A successful provider update is authoritative even when UAT's GET user
+  // endpoint does not mirror the address immediately.
+  await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });
   assert.equal(updateCount, 1);
   confirmedAddress = '1 Test Street';
   await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });
@@ -71,14 +70,11 @@ const { ensureAugmontInvestmentUser } = require('../dist/services/investment-kyc
     ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
     /account setup needs address/,
   );
-  assert.equal(updateCount, 3);
+  assert.equal(updateCount, 4);
   context = { ...context, address_line1: '1 Test Street' };
   accountExists = false;
   confirmedAddress = '';
-  await assert.rejects(
-    ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true }),
-    /did not confirm the customer street address/,
-  );
+  await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });
   assert.equal(createCount, 1);
   confirmedAddress = '1 Test Street';
   await ensureAugmontInvestmentUser('demo-uid', undefined, { requireAddressSync: true });

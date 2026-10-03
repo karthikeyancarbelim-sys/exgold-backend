@@ -7,7 +7,6 @@ import {
   augmontSubmitUserKyc,
   augmontUpdateUser,
   extractDeep,
-  isAugmontMissingResourceError,
 } from "./augmont.service";
 import { evaluateLocalInvestmentKyc } from "../utils/investment-kyc-policy";
 import { buildAugmontProfile } from "../utils/augmont-profile";
@@ -344,6 +343,12 @@ const requireConfirmedAugmontAddress = async (uniqueId: string) => {
   return addresses;
 };
 
+const isExplicitlyMissingAugmontUser = (error: unknown) =>
+  Number((error as any)?.status) === 404 || (
+    Number((error as any)?.status) === 422 &&
+    /user account does not exist|user (?:account )?not found/i.test(String((error as any)?.message || ''))
+  );
+
 const ensureAugmontUserFromContext = async (context: any, options: { syncAddress?: boolean; requireAddressSync?: boolean } = {}) => {
   const uniqueId = String(context?.firebase_uid || "");
   if (!uniqueId) throw new Error("User account is missing its provider identifier");
@@ -365,9 +370,12 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
       }
       if (!missing.length) {
         try {
-          await augmontUpdateUser(uniqueId, payload);
+          const updated = await augmontUpdateUser(uniqueId, payload);
           if (options.requireAddressSync) {
-            await requireConfirmedAugmontAddress(uniqueId);
+            // A successful provider update is the confirmation. UAT can return
+            // 422 to GET /users/{uniqueId} for an account that nevertheless
+            // accepts this PUT, so do not create a duplicate account here.
+            return updated;
           }
         } catch (updateError) {
           if (options.requireAddressSync) throw updateError;
@@ -377,7 +385,19 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
     }
     return existing;
   } catch (lookupError) {
-    if (!isAugmontMissingResourceError(lookupError)) throw lookupError;
+    if (!isExplicitlyMissingAugmontUser(lookupError)) {
+      // Augmont UAT occasionally rejects GET for an already-created profile.
+      // When an address sync was requested, attempt the idempotent update
+      // before treating the account as absent.
+      if (options.syncAddress) {
+        const { payload, missing } = await buildAugmontUserPayload(context);
+        if (missing.length) {
+          throw new Error(`Augmont account setup needs ${missing.join(' and ')}`);
+        }
+        return augmontUpdateUser(uniqueId, payload);
+      }
+      throw lookupError;
+    }
   }
 
   const { payload, missing } = await buildAugmontUserPayload(context);
@@ -387,9 +407,7 @@ const ensureAugmontUserFromContext = async (context: any, options: { syncAddress
 
   try {
     const created = await augmontCreateUser(payload);
-    return options.requireAddressSync
-      ? await requireConfirmedAugmontAddress(uniqueId)
-      : created;
+    return created;
   } catch (createError) {
     // A timed-out first request or a concurrent checkout may already have
     // created the unique provider account. Verify before surfacing failure.
